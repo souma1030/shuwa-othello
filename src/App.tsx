@@ -3,8 +3,10 @@ import './styles.css';
 
 type StoneColor = 'black' | 'white';
 type Cell = { color: StoneColor | null; word: string };
+type TeamNames = Record<StoneColor, string>;
 
 const SIZE = 6;
+const defaultTeamNames: TeamNames = { black: '黒チーム', white: '白チーム' };
 const directions = [-1, 0, 1]
   .flatMap((row) => [-1, 0, 1].map((col) => [row, col] as const))
   .filter(([row, col]) => row !== 0 || col !== 0);
@@ -76,7 +78,10 @@ export default function Home() {
   const [turn, setTurn] = useState<StoneColor>('black');
   const [moveNumber, setMoveNumber] = useState(1);
   const [flipping, setFlipping] = useState<Set<string>>(new Set());
-  const [notice, setNotice] = useState('黒の番です。表現する単語を選びましょう！');
+  const [teamNames, setTeamNames] = useState<TeamNames>(defaultTeamNames);
+  const [draftNames, setDraftNames] = useState<TeamNames>(defaultTeamNames);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [notice, setNotice] = useState('先攻・黒チームの番です。表現する単語を選びましょう！');
 
   const legal = useMemo(() => legalMoves(board, turn), [board, turn]);
   const otherLegal = useMemo(() => legalMoves(board, opponent(turn)), [board, turn]);
@@ -90,34 +95,43 @@ export default function Home() {
   );
   const gameOver = counts.open === 0 || (legal.size === 0 && otherLegal.size === 0);
 
-  function changeTurn(message?: string) {
+  function finishTurn(nextBoard: Cell[][], message: string) {
     const next = opponent(turn);
+    const nextMoves = legalMoves(nextBoard, next);
+    const currentMoves = legalMoves(nextBoard, turn);
+
+    if (nextMoves.size === 0 && currentMoves.size > 0) {
+      setMoveNumber((value) => value + 2);
+      setNotice(`${message} ${teamNames[next]}は置ける場所がないため、自動でパスしました。${teamNames[turn]}の番です。`);
+      return;
+    }
+
     setTurn(next);
     setMoveNumber((value) => value + 1);
-    setNotice(message ?? `${next === 'black' ? '黒' : '白'}の番です。表現する単語を選びましょう！`);
+    setNotice(`${message} 次は${teamNames[next]}の番です。`);
   }
 
   function place(row: number, col: number) {
     const key = `${row}-${col}`;
-    if (!legal.has(key) || gameOver) return;
+    if (!gameStarted || !legal.has(key) || gameOver) return;
 
     const flips = flipsFor(board, row, col, turn);
     const changed = new Set([key, ...flips.map(([r, c]) => `${r}-${c}`)]);
     const nextBoard = board.map((line, rowIndex) =>
       line.map((cell, colIndex) =>
-        changed.has(`${rowIndex}-${colIndex}`) ? { ...cell, color: turn } : cell,
+        changed.has(`${rowIndex}-${colIndex}`) ? { color: turn, word: '' } : cell,
       ),
     );
 
     setBoard(nextBoard);
     setFlipping(changed);
     window.setTimeout(() => setFlipping(new Set()), 620);
-    changeTurn(`正解！ ${flips.length}枚ひっくり返しました。次は${opponent(turn) === 'black' ? '黒' : '白'}の番です。`);
+    finishTurn(nextBoard, `正解！ ${flips.length}枚ひっくり返しました。`);
   }
 
   function passTurn() {
-    if (gameOver) return;
-    changeTurn(`パスしました。${opponent(turn) === 'black' ? '黒' : '白'}の番です。`);
+    if (!gameStarted || gameOver) return;
+    finishTurn(board, `${teamNames[turn]}がパスしました。`);
   }
 
   function resetGame() {
@@ -125,13 +139,66 @@ export default function Home() {
     setTurn('black');
     setMoveNumber(1);
     setFlipping(new Set());
-    setNotice('新しいゲームを始めました。黒の番です！');
+    setNotice(`新しいゲームを始めました。${teamNames.black}の番です！`);
   }
 
-  const result = counts.black === counts.white ? '引き分けです！' : `${counts.black > counts.white ? '黒' : '白'}の勝ち！`;
+  function startGame() {
+    const names = {
+      black: draftNames.black.trim() || defaultTeamNames.black,
+      white: draftNames.white.trim() || defaultTeamNames.white,
+    };
+    setTeamNames(names);
+    setDraftNames(names);
+    setBoard(makeBoard());
+    setTurn('black');
+    setMoveNumber(1);
+    setFlipping(new Set());
+    setNotice(`${names.black}の番です。表現する単語を選びましょう！`);
+    setGameStarted(true);
+  }
+
+  function editTeamNames() {
+    setDraftNames(teamNames);
+    setGameStarted(false);
+  }
+
+  const result = counts.black === counts.white ? '引き分けです！' : `${counts.black > counts.white ? teamNames.black : teamNames.white}の勝ち！`;
 
   return (
     <main>
+      {!gameStarted && (
+        <div className="setup-overlay">
+          <section className="setup-dialog" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+            <p className="setup-label">GAME SETUP</p>
+            <h2 id="setup-title">チーム名を決めよう</h2>
+            <p className="setup-description">先攻は黒、後攻は白です。それぞれのチーム名を入力してください。</p>
+            <div className="setup-fields">
+              <label>
+                <span><i className="mini-stone black" />先攻・黒</span>
+                <input
+                  type="text"
+                  value={draftNames.black}
+                  maxLength={16}
+                  onChange={(event) => setDraftNames((names) => ({ ...names, black: event.target.value }))}
+                  placeholder="先攻チーム名"
+                />
+              </label>
+              <label>
+                <span><i className="mini-stone white" />後攻・白</span>
+                <input
+                  type="text"
+                  value={draftNames.white}
+                  maxLength={16}
+                  onChange={(event) => setDraftNames((names) => ({ ...names, white: event.target.value }))}
+                  placeholder="後攻チーム名"
+                />
+              </label>
+            </div>
+            <button className="start-button" type="button" onClick={startGame}>このチームで始める <b>→</b></button>
+          </section>
+        </div>
+      )}
+
       <header className="topbar">
         <a className="brand" href="#game" aria-label="しゅわオセロ ホーム">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
@@ -153,7 +220,7 @@ export default function Home() {
               <div className={`turn-stone ${turn}`} />
               <div>
                 <span>TURN {String(moveNumber).padStart(2, '0')}</span>
-                <strong>{gameOver ? 'ゲーム終了' : `${turn === 'black' ? '黒' : '白'}のターン`}</strong>
+                <strong>{gameOver ? 'ゲーム終了' : `${teamNames[turn]}のターン`}</strong>
               </div>
               {!gameOver && <p>{legal.size > 0 ? `置ける場所は ${legal.size}か所` : '置ける場所がありません'}</p>}
             </div>
@@ -161,7 +228,7 @@ export default function Home() {
             <div className="board" role="grid" aria-label="6×6のオセロ盤">
               {board.map((row, rowIndex) => row.map((cell, colIndex) => {
                 const key = `${rowIndex}-${colIndex}`;
-                const canPlace = legal.has(key) && !gameOver;
+                const canPlace = gameStarted && legal.has(key) && !gameOver;
                 return (
                   <button
                     className={`square ${canPlace ? 'legal' : ''}`}
@@ -183,10 +250,14 @@ export default function Home() {
             <section className="score-card">
               <p className="card-label">SCORE</p>
               <div className={`player black-player ${turn === 'black' && !gameOver ? 'active' : ''}`}>
-                <div className="mini-stone black" /><span>くろ</span><strong>{counts.black}</strong>
+                <div className="mini-stone black" />
+                <div className="player-info"><small>先攻・黒</small><span>{teamNames.black}</span></div>
+                <strong>{counts.black}</strong>
               </div>
               <div className={`player white-player ${turn === 'white' && !gameOver ? 'active' : ''}`}>
-                <div className="mini-stone white" /><span>しろ</span><strong>{counts.white}</strong>
+                <div className="mini-stone white" />
+                <div className="player-info"><small>後攻・白</small><span>{teamNames.white}</span></div>
+                <strong>{counts.white}</strong>
               </div>
               <div className="score-rule" />
               <div className="remaining"><span>残りのコマ</span><strong>{counts.open}</strong></div>
@@ -199,9 +270,8 @@ export default function Home() {
               </button>
               <p className="pass-note">コマを置かずに相手の番へ移ります</p>
               <button className="reset-button" type="button" onClick={resetGame}>↻ はじめから</button>
+              <button className="teams-button" type="button" onClick={editTeamNames}>チーム名を変更</button>
             </section>
-
-            <section className="tip-card"><span>POINT</span><p>表情や口の形も、手話を伝える大切な要素です。</p></section>
           </aside>
         </div>
       </section>
