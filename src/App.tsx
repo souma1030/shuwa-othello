@@ -23,7 +23,7 @@ function makeBoard(): Cell[][] {
     Array.from({ length: SIZE }, (_, col) => {
       const center = row >= 2 && row <= 3 && col >= 2 && col <= 3;
       if (center) {
-        return { color: row === col ? 'white' : 'black', word: 'START' };
+        return { color: row === col ? 'white' : 'black', word: '' };
       }
       return { color: null, word: words[wordIndex++] };
     }),
