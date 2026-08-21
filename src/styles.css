@@ -72,6 +72,7 @@ button { font: inherit; }
 .disc.neutral { background: linear-gradient(145deg, #e5e6e1, #b9bcb8); color: #52605f; box-shadow: inset -5px -7px 10px rgba(62,70,70,.23), inset 4px 4px 7px rgba(255,255,255,.7), 0 4px 5px rgba(11,70,63,.28); }
 .disc.black { background: radial-gradient(circle at 35% 28%, #39485e, #111e31 68%); color: white; box-shadow: inset -6px -7px 10px rgba(0,0,0,.4), inset 4px 4px 7px rgba(255,255,255,.13), 0 4px 6px rgba(2,39,35,.42); }
 .disc.white { background: radial-gradient(circle at 35% 28%, #fff, #e7e8e3 72%); color: var(--ink); box-shadow: inset -5px -7px 9px rgba(65,75,75,.13), inset 4px 4px 7px white, 0 4px 6px rgba(2,39,35,.28); }
+.square.corner-hidden .disc span { color: #697574; font-size: clamp(15px, 2vw, 24px); letter-spacing: 0; }
 .square.legal { cursor: pointer; }
 .square.legal .disc { animation: legalPulse 1.5s ease-in-out infinite; outline: 3px solid #ffd05f; outline-offset: 2px; }
 .square.legal:hover .disc, .square.legal:focus-visible .disc { transform: translateY(-5px) scale(1.05); filter: brightness(1.08); animation: none; }
@@ -84,6 +85,7 @@ button { font: inherit; }
 .legend i { display: block; width: 12px; height: 12px; border-radius: 50%; }
 .legal-dot { background: #cdd0cd; border: 2px solid #ffd05f; }
 .neutral-dot { background: #cdd0cd; }
+.corner-dot { display: grid !important; place-items: center; background: #697574; color: white; font-size: 8px; font-style: normal; }
 
 .side-panel { display: flex; flex-direction: column; gap: 16px; }
 .score-card, .action-card { background: white; border-radius: 20px; box-shadow: 0 12px 38px rgba(30,43,56,.08); }
@@ -101,16 +103,14 @@ button { font: inherit; }
 .remaining { display: flex; justify-content: space-between; align-items: center; color: #7c8591; font-size: 12px; font-weight: 700; padding: 0 11px; }
 .remaining strong { color: var(--ink); font: 800 18px var(--font-archivo); }
 .action-card { padding: 16px; }
-.message { display: flex; gap: 10px; align-items: flex-start; min-height: 70px; background: #eef7f4; color: #286c64; padding: 13px; border-radius: 12px; }
-.message > span { width: 21px; height: 21px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: #63ac9e; color: white; font-size: 11px; font-weight: 900; }
-.message p { margin: 0; font-size: 12px; line-height: 1.65; font-weight: 700; }
-.pass-button { margin-top: 14px; width: 100%; min-height: 74px; border: 0; border-radius: 14px; background: var(--coral); color: white; text-align: left; padding: 12px 17px; font-weight: 900; font-size: 16px; box-shadow: 0 5px 0 #c94841; cursor: pointer; transition: .15s; }
-.pass-button span { display: block; font-size: 10px; opacity: .78; margin-bottom: 3px; }
+.message { display: flex; gap: 13px; align-items: flex-start; min-height: 112px; background: #eef7f4; color: #286c64; padding: 18px 17px; border-radius: 15px; }
+.message > span { width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; background: #63ac9e; color: white; font-size: 13px; font-weight: 900; }
+.message p { margin: 1px 0 0; font-size: 14px; line-height: 1.75; font-weight: 800; }
+.pass-button { margin-top: 14px; width: 100%; min-height: 62px; border: 0; border-radius: 14px; background: var(--coral); color: white; text-align: left; padding: 12px 17px; font-weight: 900; font-size: 16px; box-shadow: 0 5px 0 #c94841; cursor: pointer; transition: .15s; }
 .pass-button b { float: right; font-size: 20px; }
 .pass-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 7px 0 #c94841; }
 .pass-button:active:not(:disabled) { transform: translateY(4px); box-shadow: 0 1px 0 #c94841; }
 .pass-button:disabled { opacity: .4; cursor: not-allowed; }
-.pass-note { text-align: center; color: #9a9fa6; font-size: 10px; margin: 11px 0 2px; }
 .reset-button { width: 100%; border: 0; background: transparent; color: #667286; padding: 12px 0 4px; cursor: pointer; font-size: 12px; font-weight: 800; }
 .reset-button:hover { color: var(--coral); }
 .teams-button { width: 100%; border: 0; background: transparent; color: #8b939d; padding: 7px 0 2px; cursor: pointer; font-size: 11px; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }

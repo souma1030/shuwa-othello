@@ -36,6 +36,10 @@ function opponent(color: StoneColor): StoneColor {
   return color === 'black' ? 'white' : 'black';
 }
 
+function isCorner(row: number, col: number) {
+  return (row === 0 || row === SIZE - 1) && (col === 0 || col === SIZE - 1);
+}
+
 function flipsFor(board: Cell[][], row: number, col: number, turn: StoneColor) {
   if (board[row][col].color) return [];
   const flips: Array<[number, number]> = [];
@@ -78,6 +82,7 @@ export default function Home() {
   const [turn, setTurn] = useState<StoneColor>('black');
   const [moveNumber, setMoveNumber] = useState(1);
   const [flipping, setFlipping] = useState<Set<string>>(new Set());
+  const [revealedCorners, setRevealedCorners] = useState<Set<string>>(new Set());
   const [teamNames, setTeamNames] = useState<TeamNames>(defaultTeamNames);
   const [draftNames, setDraftNames] = useState<TeamNames>(defaultTeamNames);
   const [gameStarted, setGameStarted] = useState(false);
@@ -115,6 +120,12 @@ export default function Home() {
     const key = `${row}-${col}`;
     if (!gameStarted || !legal.has(key) || gameOver) return;
 
+    if (isCorner(row, col) && !revealedCorners.has(key)) {
+      setRevealedCorners((corners) => new Set(corners).add(key));
+      setNotice('四隅の単語を公開しました。手話で表現し、正解ならもう一度クリックしてください。');
+      return;
+    }
+
     const flips = flipsFor(board, row, col, turn);
     const changed = new Set([key, ...flips.map(([r, c]) => `${r}-${c}`)]);
     const nextBoard = board.map((line, rowIndex) =>
@@ -139,6 +150,7 @@ export default function Home() {
     setTurn('black');
     setMoveNumber(1);
     setFlipping(new Set());
+    setRevealedCorners(new Set());
     setNotice(`新しいゲームを始めました。${teamNames.black}の番です！`);
   }
 
@@ -153,6 +165,7 @@ export default function Home() {
     setTurn('black');
     setMoveNumber(1);
     setFlipping(new Set());
+    setRevealedCorners(new Set());
     setNotice(`${names.black}の番です。表現する単語を選びましょう！`);
     setGameStarted(true);
   }
@@ -229,21 +242,24 @@ export default function Home() {
               {board.map((row, rowIndex) => row.map((cell, colIndex) => {
                 const key = `${rowIndex}-${colIndex}`;
                 const canPlace = gameStarted && legal.has(key) && !gameOver;
+                const cornerWordHidden = isCorner(rowIndex, colIndex) && !cell.color && !revealedCorners.has(key);
                 return (
                   <button
-                    className={`square ${canPlace ? 'legal' : ''}`}
+                    className={`square ${canPlace ? 'legal' : ''} ${cornerWordHidden ? 'corner-hidden' : ''}`}
                     key={key}
                     type="button"
                     disabled={!canPlace}
                     onClick={() => place(rowIndex, colIndex)}
-                    aria-label={canPlace ? `${cell.word}。ここに置けます` : `${cell.word}。ここには置けません`}
+                    aria-label={cornerWordHidden
+                      ? (canPlace ? '四隅の単語を表示します' : '四隅の非公開コマ')
+                      : (canPlace ? `${cell.word}。ここに置けます` : `${cell.word}。ここには置けません`)}
                   >
-                    <span className={`disc ${cell.color ?? 'neutral'} ${flipping.has(key) ? 'flipping' : ''}`}><span>{cell.word}</span></span>
+                    <span className={`disc ${cell.color ?? 'neutral'} ${flipping.has(key) ? 'flipping' : ''}`}><span>{cornerWordHidden ? '？' : cell.word}</span></span>
                   </button>
                 );
               }))}
             </div>
-            <div className="legend"><span><i className="legal-dot" />光っているコマに置けます</span><span><i className="neutral-dot" />まだ誰のものでもないコマ</span></div>
+            <div className="legend"><span><i className="legal-dot" />光っているコマに置けます</span><span><i className="neutral-dot" />まだ誰のものでもないコマ</span><span><i className="corner-dot">?</i>四隅は1回目で単語を表示</span></div>
           </section>
 
           <aside className="side-panel">
@@ -266,9 +282,8 @@ export default function Home() {
             <section className="action-card">
               <div className="message" role="status" aria-live="polite"><span aria-hidden="true">✓</span><p>{gameOver ? result : notice}</p></div>
               <button className="pass-button" type="button" onClick={passTurn} disabled={gameOver}>
-                <span>答えがちがったとき</span>ターンをパス <b>→</b>
+                ターンをパス <b>→</b>
               </button>
-              <p className="pass-note">コマを置かずに相手の番へ移ります</p>
               <button className="reset-button" type="button" onClick={resetGame}>↻ はじめから</button>
               <button className="teams-button" type="button" onClick={editTeamNames}>チーム名を変更</button>
             </section>
