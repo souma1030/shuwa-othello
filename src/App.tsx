@@ -299,9 +299,11 @@ export default function Home() {
               <div className="result-board" role="grid" aria-label="対戦終了時の盤面">
                 {board.map((row, rowIndex) => row.map((cell, colIndex) => {
                   const key = `${rowIndex}-${colIndex}`;
+                  const squareNumber = rowIndex * SIZE + colIndex + 1;
                   const cornerWordHidden = isCorner(rowIndex, colIndex) && !cell.color && !revealedCorners.has(key);
                   return (
-                    <div className="result-square" role="gridcell" key={key}>
+                    <div className="result-square" role="gridcell" aria-label={`${squareNumber}番`} key={key}>
+                      <span className="result-number" aria-hidden="true">{squareNumber}</span>
                       <span className={`result-disc ${cell.color ?? 'neutral'}`}>
                         <span>{cornerWordHidden ? '？' : cell.word}</span>
                       </span>
@@ -361,6 +363,7 @@ export default function Home() {
             <div className="board" role="grid" aria-label="6×6のオセロ盤">
               {board.map((row, rowIndex) => row.map((cell, colIndex) => {
                 const key = `${rowIndex}-${colIndex}`;
+                const squareNumber = rowIndex * SIZE + colIndex + 1;
                 const canPlace = gameStarted && legal.has(key) && !gameOver;
                 const cornerWordHidden = isCorner(rowIndex, colIndex) && !cell.color && !revealedCorners.has(key);
                 return (
@@ -370,10 +373,11 @@ export default function Home() {
                     type="button"
                     disabled={!canPlace}
                     onClick={() => selectMove(rowIndex, colIndex)}
-                    aria-label={cornerWordHidden
+                    aria-label={`${squareNumber}番。${cornerWordHidden
                       ? (canPlace ? '四隅の単語を表示して判定します' : '四隅の非公開コマ')
-                      : (canPlace ? `${cell.word}。判定画面を開きます` : `${cell.word}。ここには置けません`)}
+                      : (canPlace ? `${cell.word}。判定画面を開きます` : `${cell.word}。ここには置けません`)}`}
                   >
+                    <span className="square-number" aria-hidden="true">{squareNumber}</span>
                     <span className={`disc ${cell.color ?? 'neutral'} ${flipping.has(key) ? 'flipping' : ''}`}><span>{cornerWordHidden ? '？' : cell.word}</span></span>
                   </button>
                 );
