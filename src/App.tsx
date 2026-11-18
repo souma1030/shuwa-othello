@@ -4,6 +4,14 @@ import './styles.css';
 type StoneColor = 'black' | 'white';
 type Cell = { color: StoneColor | null; word: string };
 type TeamNames = Record<StoneColor, string>;
+type SelectedMove = { row: number; col: number; word: string };
+type GameSnapshot = {
+  board: Cell[][];
+  turn: StoneColor;
+  moveNumber: number;
+  revealedCorners: Set<string>;
+  notice: string;
+};
 
 const SIZE = 6;
 const defaultTeamNames: TeamNames = { black: '黒チーム', white: '白チーム' };
@@ -12,12 +20,12 @@ const directions = [-1, 0, 1]
   .filter(([row, col]) => row !== 0 || col !== 0);
 
 const words = [
-  'インターネット', 'キリン', '神戸', '滋賀', '京都', 'アンパンマン',
+  '河原町', 'キリン', 'インターネット', '滋賀', '京都', '宇治',
   '料理', '本', '馬', '母', 'うさぎ', '大阪',
-  'パソコン', '雨', '花', '六甲',
+  'パソコン', '雨', '花', 'オリンピック',
   '誕生日', '白', '犬', '日本',
   'サッカー', '時計', 'ねこ', 'うどん', '桃', '駅',
-  'オリンピック', '医者', 'コンビニ', '飛行機', '船', 'メリーゴーラウンド',
+  '祇園', '医者', 'コンビニ', '飛行機', '船', '出町柳',
 ];
 
 function makeBoard(): Cell[][] {
@@ -88,6 +96,8 @@ export default function Home() {
   const [draftNames, setDraftNames] = useState<TeamNames>(defaultTeamNames);
   const [gameStarted, setGameStarted] = useState(false);
   const [notice, setNotice] = useState('先攻・黒チームの番です。表現する単語を選びましょう！');
+  const [selectedMove, setSelectedMove] = useState<SelectedMove | null>(null);
+  const [previousState, setPreviousState] = useState<GameSnapshot | null>(null);
 
   const legal = useMemo(() => legalMoves(board, turn), [board, turn]);
   const otherLegal = useMemo(() => legalMoves(board, opponent(turn)), [board, turn]);
@@ -100,6 +110,16 @@ export default function Home() {
     { black: 0, white: 0, open: 0 },
   );
   const gameOver = counts.open === 0 || (legal.size === 0 && otherLegal.size === 0);
+
+  function rememberState() {
+    setPreviousState({
+      board: board.map((line) => line.map((cell) => ({ ...cell }))),
+      turn,
+      moveNumber,
+      revealedCorners: new Set(revealedCorners),
+      notice,
+    });
+  }
 
   function finishTurn(nextBoard: Cell[][], message: string) {
     const next = opponent(turn);
@@ -117,15 +137,28 @@ export default function Home() {
     setNotice(`${message} 次は${teamNames[next]}の番です。`);
   }
 
-  function place(row: number, col: number) {
+  function selectMove(row: number, col: number) {
     const key = `${row}-${col}`;
     if (!gameStarted || !legal.has(key) || gameOver) return;
 
     if (isCorner(row, col) && !revealedCorners.has(key)) {
       setRevealedCorners((corners) => new Set(corners).add(key));
-      setNotice('四隅の単語を公開しました。手話で表現し、正解ならもう一度クリックしてください。');
+      setNotice('四隅の単語を公開しました。司会者が正誤を判定してください。');
+    }
+
+    setSelectedMove({ row, col, word: board[row][col].word });
+  }
+
+  function confirmPlacement() {
+    if (!selectedMove) return;
+    const { row, col } = selectedMove;
+    const key = `${row}-${col}`;
+    if (!legal.has(key) || gameOver) {
+      setSelectedMove(null);
       return;
     }
+
+    rememberState();
 
     const flips = flipsFor(board, row, col, turn);
     const changed = new Set([key, ...flips.map(([r, c]) => `${r}-${c}`)]);
@@ -138,12 +171,33 @@ export default function Home() {
     setBoard(nextBoard);
     setFlipping(changed);
     window.setTimeout(() => setFlipping(new Set()), 620);
+    setSelectedMove(null);
     finishTurn(nextBoard, `正解！ ${flips.length}枚ひっくり返しました。`);
+  }
+
+  function confirmIncorrect() {
+    if (!selectedMove || gameOver) return;
+    rememberState();
+    setSelectedMove(null);
+    finishTurn(board, `不正解。${teamNames[turn]}はパスしました。`);
   }
 
   function passTurn() {
     if (!gameStarted || gameOver) return;
+    rememberState();
     finishTurn(board, `${teamNames[turn]}がパスしました。`);
+  }
+
+  function undoLastAction() {
+    if (!previousState) return;
+    setBoard(previousState.board.map((line) => line.map((cell) => ({ ...cell }))));
+    setTurn(previousState.turn);
+    setMoveNumber(previousState.moveNumber);
+    setRevealedCorners(new Set(previousState.revealedCorners));
+    setNotice(previousState.notice);
+    setFlipping(new Set());
+    setSelectedMove(null);
+    setPreviousState(null);
   }
 
   function resetGame() {
@@ -152,6 +206,8 @@ export default function Home() {
     setMoveNumber(1);
     setFlipping(new Set());
     setRevealedCorners(new Set());
+    setSelectedMove(null);
+    setPreviousState(null);
     setNotice(`新しいゲームを始めました。${teamNames.black}の番です！`);
   }
 
@@ -167,16 +223,20 @@ export default function Home() {
     setMoveNumber(1);
     setFlipping(new Set());
     setRevealedCorners(new Set());
+    setSelectedMove(null);
+    setPreviousState(null);
     setNotice(`${names.black}の番です。表現する単語を選びましょう！`);
     setGameStarted(true);
   }
 
   function editTeamNames() {
     setDraftNames(teamNames);
+    setSelectedMove(null);
     setGameStarted(false);
   }
 
-  const result = counts.black === counts.white ? '引き分けです！' : `${counts.black > counts.white ? teamNames.black : teamNames.white}の勝ち！`;
+  const winnerColor: StoneColor | null = counts.black === counts.white ? null : (counts.black > counts.white ? 'black' : 'white');
+  const result = winnerColor ? `${teamNames[winnerColor]}の勝ち！` : '引き分けです！';
 
   return (
     <main>
@@ -213,19 +273,78 @@ export default function Home() {
         </div>
       )}
 
+      {selectedMove && (
+        <div className="judge-overlay" onClick={() => setSelectedMove(null)}>
+          <section
+            className="judge-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${selectedMove.word}の正誤判定`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="judge-disc"><span>{selectedMove.word}</span></div>
+            <div className="judge-actions">
+              <button className="judge-correct" type="button" onClick={confirmPlacement}>正解</button>
+              <button className="judge-incorrect" type="button" onClick={confirmIncorrect}>不正解</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {gameStarted && gameOver && !selectedMove && (
+        <div className="result-overlay">
+          <section className="result-dialog" role="dialog" aria-modal="true" aria-labelledby="result-title">
+            <div className="result-board-area">
+              <p className="result-kicker">最終盤面</p>
+              <div className="result-board" role="grid" aria-label="対戦終了時の盤面">
+                {board.map((row, rowIndex) => row.map((cell, colIndex) => {
+                  const key = `${rowIndex}-${colIndex}`;
+                  const cornerWordHidden = isCorner(rowIndex, colIndex) && !cell.color && !revealedCorners.has(key);
+                  return (
+                    <div className="result-square" role="gridcell" key={key}>
+                      <span className={`result-disc ${cell.color ?? 'neutral'}`}>
+                        <span>{cornerWordHidden ? '？' : cell.word}</span>
+                      </span>
+                    </div>
+                  );
+                }))}
+              </div>
+            </div>
+
+            <div className="result-summary">
+              <p className="result-kicker">対戦結果</p>
+              <h2 id="result-title">{result}</h2>
+              <div className="final-scores">
+                <div className={winnerColor === 'black' ? 'winner' : ''}>
+                  <span className="mini-stone black" aria-hidden="true" />
+                  <p><small>先攻・黒</small>{teamNames.black}</p>
+                  <strong>{counts.black}</strong>
+                </div>
+                <div className={winnerColor === 'white' ? 'winner' : ''}>
+                  <span className="mini-stone white" aria-hidden="true" />
+                  <p><small>後攻・白</small>{teamNames.white}</p>
+                  <strong>{counts.white}</strong>
+                </div>
+              </div>
+              <button className="play-again-button" type="button" onClick={resetGame}>もう一度最初から</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       <header className="topbar">
         <a className="brand" href="#game" aria-label="しゅわオセロ ホーム">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>しゅわ<span>オセロ</span></span>
         </a>
-        <div className="howto"><span>1</span> 単語を選ぶ <b>→</b> <span>2</span> 手話で表現 <b>→</b> <span>3</span> 正解なら置く</div>
+        <div className="howto"><span>1</span> 単語を選ぶ <b>→</b> <span>2</span> 手話で表現 <b>→</b> <span>3</span> 司会者が判定</div>
       </header>
 
       <section className="hero" id="game">
         <div className="intro">
           <p className="eyebrow"><span /> 手話でつながる、ことばのゲーム</p>
           <h1>手で伝えて、<br /><em>盤面をうごかそう。</em></h1>
-          <p>置けるコマの単語を手話で表現。正解ならクリックして、相手のコマをひっくり返そう！</p>
+          <p>置けるコマを選んで手話で表現。司会者の判定で、コマを置くかパスするかが決まります。</p>
         </div>
 
         <div className="game-layout">
@@ -250,17 +369,17 @@ export default function Home() {
                     key={key}
                     type="button"
                     disabled={!canPlace}
-                    onClick={() => place(rowIndex, colIndex)}
+                    onClick={() => selectMove(rowIndex, colIndex)}
                     aria-label={cornerWordHidden
-                      ? (canPlace ? '四隅の単語を表示します' : '四隅の非公開コマ')
-                      : (canPlace ? `${cell.word}。ここに置けます` : `${cell.word}。ここには置けません`)}
+                      ? (canPlace ? '四隅の単語を表示して判定します' : '四隅の非公開コマ')
+                      : (canPlace ? `${cell.word}。判定画面を開きます` : `${cell.word}。ここには置けません`)}
                   >
                     <span className={`disc ${cell.color ?? 'neutral'} ${flipping.has(key) ? 'flipping' : ''}`}><span>{cornerWordHidden ? '？' : cell.word}</span></span>
                   </button>
                 );
               }))}
             </div>
-            <div className="legend"><span><i className="legal-dot" />光っているコマに置けます</span><span><i className="neutral-dot" />まだ誰のものでもないコマ</span><span><i className="corner-dot">?</i>四隅は1回目で単語を表示</span></div>
+            <div className="legend"><span><i className="legal-dot" />光っているコマを選べます</span><span><i className="neutral-dot" />まだ誰のものでもないコマ</span><span><i className="corner-dot">?</i>四隅は選ぶと単語を公開</span></div>
           </section>
 
           <aside className="side-panel">
@@ -282,8 +401,11 @@ export default function Home() {
 
             <section className="action-card">
               <div className="message" role="status" aria-live="polite"><span aria-hidden="true">✓</span><p>{gameOver ? result : notice}</p></div>
-              <button className="pass-button" type="button" onClick={passTurn} disabled={gameOver}>
+              <button className="pass-button" type="button" onClick={passTurn} disabled={gameOver || Boolean(selectedMove)}>
                 ターンをパス <b>→</b>
+              </button>
+              <button className="undo-button" type="button" onClick={undoLastAction} disabled={!previousState || Boolean(selectedMove)}>
+                ↶ 直前の判定を取り消す
               </button>
               <button className="reset-button" type="button" onClick={resetGame}>↻ はじめから</button>
               <button className="teams-button" type="button" onClick={editTeamNames}>チーム名を変更</button>
