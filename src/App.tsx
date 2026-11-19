@@ -9,7 +9,6 @@ type GameSnapshot = {
   board: Cell[][];
   turn: StoneColor;
   moveNumber: number;
-  revealedCorners: Set<string>;
   notice: string;
 };
 
@@ -43,10 +42,6 @@ function makeBoard(): Cell[][] {
 
 function opponent(color: StoneColor): StoneColor {
   return color === 'black' ? 'white' : 'black';
-}
-
-function isCorner(row: number, col: number) {
-  return (row === 0 || row === SIZE - 1) && (col === 0 || col === SIZE - 1);
 }
 
 function flipsFor(board: Cell[][], row: number, col: number, turn: StoneColor) {
@@ -91,11 +86,10 @@ export default function Home() {
   const [turn, setTurn] = useState<StoneColor>('black');
   const [moveNumber, setMoveNumber] = useState(1);
   const [flipping, setFlipping] = useState<Set<string>>(new Set());
-  const [revealedCorners, setRevealedCorners] = useState<Set<string>>(new Set());
   const [teamNames, setTeamNames] = useState<TeamNames>(defaultTeamNames);
   const [draftNames, setDraftNames] = useState<TeamNames>(defaultTeamNames);
   const [gameStarted, setGameStarted] = useState(false);
-  const [notice, setNotice] = useState('先攻・黒チームの番です。表現する単語を選びましょう！');
+  const [notice, setNotice] = useState('先攻・黒チームの番です。表現する番号を選びましょう！');
   const [selectedMove, setSelectedMove] = useState<SelectedMove | null>(null);
   const [previousState, setPreviousState] = useState<GameSnapshot | null>(null);
 
@@ -116,7 +110,6 @@ export default function Home() {
       board: board.map((line) => line.map((cell) => ({ ...cell }))),
       turn,
       moveNumber,
-      revealedCorners: new Set(revealedCorners),
       notice,
     });
   }
@@ -140,12 +133,6 @@ export default function Home() {
   function selectMove(row: number, col: number) {
     const key = `${row}-${col}`;
     if (!gameStarted || !legal.has(key) || gameOver) return;
-
-    if (isCorner(row, col) && !revealedCorners.has(key)) {
-      setRevealedCorners((corners) => new Set(corners).add(key));
-      setNotice('四隅の単語を公開しました。司会者が正誤を判定してください。');
-    }
-
     setSelectedMove({ row, col, word: board[row][col].word });
   }
 
@@ -193,7 +180,6 @@ export default function Home() {
     setBoard(previousState.board.map((line) => line.map((cell) => ({ ...cell }))));
     setTurn(previousState.turn);
     setMoveNumber(previousState.moveNumber);
-    setRevealedCorners(new Set(previousState.revealedCorners));
     setNotice(previousState.notice);
     setFlipping(new Set());
     setSelectedMove(null);
@@ -205,7 +191,6 @@ export default function Home() {
     setTurn('black');
     setMoveNumber(1);
     setFlipping(new Set());
-    setRevealedCorners(new Set());
     setSelectedMove(null);
     setPreviousState(null);
     setNotice(`新しいゲームを始めました。${teamNames.black}の番です！`);
@@ -222,10 +207,9 @@ export default function Home() {
     setTurn('black');
     setMoveNumber(1);
     setFlipping(new Set());
-    setRevealedCorners(new Set());
     setSelectedMove(null);
     setPreviousState(null);
-    setNotice(`${names.black}の番です。表現する単語を選びましょう！`);
+    setNotice(`${names.black}の番です。表現する番号を選びましょう！`);
     setGameStarted(true);
   }
 
@@ -274,13 +258,12 @@ export default function Home() {
       )}
 
       {selectedMove && (
-        <div className="judge-overlay" onClick={() => setSelectedMove(null)}>
+        <div className="judge-overlay">
           <section
             className="judge-dialog"
             role="dialog"
             aria-modal="true"
             aria-label={`${selectedMove.word}の正誤判定`}
-            onClick={(event) => event.stopPropagation()}
           >
             <div className="judge-disc"><span>{selectedMove.word}</span></div>
             <div className="judge-actions">
@@ -300,12 +283,10 @@ export default function Home() {
                 {board.map((row, rowIndex) => row.map((cell, colIndex) => {
                   const key = `${rowIndex}-${colIndex}`;
                   const squareNumber = rowIndex * SIZE + colIndex + 1;
-                  const cornerWordHidden = isCorner(rowIndex, colIndex) && !cell.color && !revealedCorners.has(key);
                   return (
                     <div className="result-square" role="gridcell" aria-label={`${squareNumber}番`} key={key}>
-                      <span className="result-number" aria-hidden="true">{squareNumber}</span>
                       <span className={`result-disc ${cell.color ?? 'neutral'}`}>
-                        <span>{cornerWordHidden ? '？' : cell.word}</span>
+                        <span>{squareNumber}</span>
                       </span>
                     </div>
                   );
@@ -339,14 +320,14 @@ export default function Home() {
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>しゅわ<span>オセロ</span></span>
         </a>
-        <div className="howto"><span>1</span> 単語を選ぶ <b>→</b> <span>2</span> 手話で表現 <b>→</b> <span>3</span> 司会者が判定</div>
+        <div className="howto"><span>1</span> 番号を選ぶ <b>→</b> <span>2</span> 手話で表現 <b>→</b> <span>3</span> 司会者が判定</div>
       </header>
 
       <section className="hero" id="game">
         <div className="intro">
           <p className="eyebrow"><span /> 手話でつながる、ことばのゲーム</p>
           <h1>手で伝えて、<br /><em>盤面をうごかそう。</em></h1>
-          <p>置けるコマを選んで手話で表現。司会者の判定で、コマを置くかパスするかが決まります。</p>
+          <p>光っている番号を選ぶと単語を公開。手話で表現し、司会者が正誤を判定します。</p>
         </div>
 
         <div className="game-layout">
@@ -365,25 +346,24 @@ export default function Home() {
                 const key = `${rowIndex}-${colIndex}`;
                 const squareNumber = rowIndex * SIZE + colIndex + 1;
                 const canPlace = gameStarted && legal.has(key) && !gameOver;
-                const cornerWordHidden = isCorner(rowIndex, colIndex) && !cell.color && !revealedCorners.has(key);
+                const cellState = cell.color
+                  ? `${cell.color === 'black' ? '黒' : '白'}のコマ`
+                  : (canPlace ? '選択すると単語を公開して判定します' : 'ここには置けません');
                 return (
                   <button
-                    className={`square ${canPlace ? 'legal' : ''} ${cornerWordHidden ? 'corner-hidden' : ''}`}
+                    className={`square ${canPlace ? 'legal' : ''}`}
                     key={key}
                     type="button"
                     disabled={!canPlace}
                     onClick={() => selectMove(rowIndex, colIndex)}
-                    aria-label={`${squareNumber}番。${cornerWordHidden
-                      ? (canPlace ? '四隅の単語を表示して判定します' : '四隅の非公開コマ')
-                      : (canPlace ? `${cell.word}。判定画面を開きます` : `${cell.word}。ここには置けません`)}`}
+                    aria-label={`${squareNumber}番。${cellState}`}
                   >
-                    <span className="square-number" aria-hidden="true">{squareNumber}</span>
-                    <span className={`disc ${cell.color ?? 'neutral'} ${flipping.has(key) ? 'flipping' : ''}`}><span>{cornerWordHidden ? '？' : cell.word}</span></span>
+                    <span className={`disc ${cell.color ?? 'neutral'} ${flipping.has(key) ? 'flipping' : ''}`}><span>{squareNumber}</span></span>
                   </button>
                 );
               }))}
             </div>
-            <div className="legend"><span><i className="legal-dot" />光っているコマを選べます</span><span><i className="neutral-dot" />まだ誰のものでもないコマ</span><span><i className="corner-dot">?</i>四隅は選ぶと単語を公開</span></div>
+            <div className="legend"><span><i className="legal-dot" />光っている番号を選べます</span><span><i className="neutral-dot" />単語は選ぶまで非公開</span></div>
           </section>
 
           <aside className="side-panel">
