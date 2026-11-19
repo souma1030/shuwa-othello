@@ -2,9 +2,14 @@ import { useMemo, useState } from 'react';
 import './styles.css';
 
 type StoneColor = 'black' | 'white';
-type Cell = { color: StoneColor | null; word: string };
+type Cell = {
+  color: StoneColor | null;
+  word: string;
+  number: number | null;
+  revealed: boolean;
+};
 type TeamNames = Record<StoneColor, string>;
-type SelectedMove = { row: number; col: number; word: string };
+type SelectedMove = { row: number; col: number; word: string; number: number };
 type GameSnapshot = {
   board: Cell[][];
   turn: StoneColor;
@@ -33,9 +38,10 @@ function makeBoard(): Cell[][] {
     Array.from({ length: SIZE }, (_, col) => {
       const center = row >= 2 && row <= 3 && col >= 2 && col <= 3;
       if (center) {
-        return { color: row === col ? 'white' : 'black', word: '' };
+        return { color: row === col ? 'white' : 'black', word: '', number: null, revealed: false };
       }
-      return { color: null, word: words[wordIndex++] };
+      const number = wordIndex + 1;
+      return { color: null, word: words[wordIndex++], number, revealed: false };
     }),
   );
 }
@@ -133,7 +139,9 @@ export default function Home() {
   function selectMove(row: number, col: number) {
     const key = `${row}-${col}`;
     if (!gameStarted || !legal.has(key) || gameOver) return;
-    setSelectedMove({ row, col, word: board[row][col].word });
+    const cell = board[row][col];
+    if (cell.number === null) return;
+    setSelectedMove({ row, col, word: cell.word, number: cell.number });
   }
 
   function confirmPlacement() {
@@ -151,7 +159,7 @@ export default function Home() {
     const changed = new Set([key, ...flips.map(([r, c]) => `${r}-${c}`)]);
     const nextBoard = board.map((line, rowIndex) =>
       line.map((cell, colIndex) =>
-        changed.has(`${rowIndex}-${colIndex}`) ? { color: turn, word: '' } : cell,
+        changed.has(`${rowIndex}-${colIndex}`) ? { ...cell, color: turn, word: '', revealed: false } : cell,
       ),
     );
 
@@ -165,8 +173,16 @@ export default function Home() {
   function confirmIncorrect() {
     if (!selectedMove || gameOver) return;
     rememberState();
+    const nextBoard = board.map((line, rowIndex) =>
+      line.map((cell, colIndex) =>
+        rowIndex === selectedMove.row && colIndex === selectedMove.col
+          ? { ...cell, revealed: true }
+          : cell,
+      ),
+    );
+    setBoard(nextBoard);
     setSelectedMove(null);
-    finishTurn(board, `不正解。${teamNames[turn]}はパスしました。`);
+    finishTurn(nextBoard, `不正解。${teamNames[turn]}はパスしました。`);
   }
 
   function passTurn() {
@@ -263,9 +279,11 @@ export default function Home() {
             className="judge-dialog"
             role="dialog"
             aria-modal="true"
-            aria-label={`${selectedMove.word}の正誤判定`}
+            aria-label={`${selectedMove.number}番、${selectedMove.word}の正誤判定`}
           >
-            <div className="judge-disc"><span>{selectedMove.word}</span></div>
+            <div className="judge-disc">
+              <span className={selectedMove.word.length >= 6 ? 'long-word' : ''}>{selectedMove.word}</span>
+            </div>
             <div className="judge-actions">
               <button className="judge-correct" type="button" onClick={confirmPlacement}>正解</button>
               <button className="judge-incorrect" type="button" onClick={confirmIncorrect}>不正解</button>
@@ -282,11 +300,20 @@ export default function Home() {
               <div className="result-board" role="grid" aria-label="対戦終了時の盤面">
                 {board.map((row, rowIndex) => row.map((cell, colIndex) => {
                   const key = `${rowIndex}-${colIndex}`;
-                  const squareNumber = rowIndex * SIZE + colIndex + 1;
+                  const cellLabel = cell.color
+                    ? `${cell.color === 'black' ? '黒' : '白'}のコマ`
+                    : `${cell.number}番${cell.revealed ? `、${cell.word}` : ''}`;
                   return (
-                    <div className="result-square" role="gridcell" aria-label={`${squareNumber}番`} key={key}>
+                    <div className="result-square" role="gridcell" aria-label={cellLabel} key={key}>
                       <span className={`result-disc ${cell.color ?? 'neutral'}`}>
-                        <span>{squareNumber}</span>
+                        {!cell.color && (cell.revealed ? (
+                          <span className="revealed-label">
+                            <strong>{cell.number}</strong>
+                            <span className={cell.word.length >= 6 ? 'long-word' : ''}>{cell.word}</span>
+                          </span>
+                        ) : (
+                          <span className="disc-number">{cell.number}</span>
+                        ))}
                       </span>
                     </div>
                   );
@@ -344,11 +371,10 @@ export default function Home() {
             <div className="board" role="grid" aria-label="6×6のオセロ盤">
               {board.map((row, rowIndex) => row.map((cell, colIndex) => {
                 const key = `${rowIndex}-${colIndex}`;
-                const squareNumber = rowIndex * SIZE + colIndex + 1;
                 const canPlace = gameStarted && legal.has(key) && !gameOver;
                 const cellState = cell.color
                   ? `${cell.color === 'black' ? '黒' : '白'}のコマ`
-                  : (canPlace ? '選択すると単語を公開して判定します' : 'ここには置けません');
+                  : `${cell.number}番。${cell.revealed ? `${cell.word}。` : ''}${canPlace ? '選択すると単語を公開して判定します' : 'ここには置けません'}`;
                 return (
                   <button
                     className={`square ${canPlace ? 'legal' : ''}`}
@@ -356,9 +382,18 @@ export default function Home() {
                     type="button"
                     disabled={!canPlace}
                     onClick={() => selectMove(rowIndex, colIndex)}
-                    aria-label={`${squareNumber}番。${cellState}`}
+                    aria-label={cellState}
                   >
-                    <span className={`disc ${cell.color ?? 'neutral'} ${flipping.has(key) ? 'flipping' : ''}`}><span>{squareNumber}</span></span>
+                    <span className={`disc ${cell.color ?? 'neutral'} ${flipping.has(key) ? 'flipping' : ''}`}>
+                      {!cell.color && (cell.revealed ? (
+                        <span className="revealed-label">
+                          <strong>{cell.number}</strong>
+                          <span className={cell.word.length >= 6 ? 'long-word' : ''}>{cell.word}</span>
+                        </span>
+                      ) : (
+                        <span className="disc-number">{cell.number}</span>
+                      ))}
+                    </span>
                   </button>
                 );
               }))}
